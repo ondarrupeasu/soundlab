@@ -3963,6 +3963,7 @@ function lpDrawClock(pos, countdown, beat) {
   const { ctx, width, height } = setupCanvas(c);
   ctx.clearRect(0, 0, width, height);
   const cx = width / 2, cy = height / 2, r = Math.min(cx, cy) - 5;
+  if (r <= 0) return;   // canvas aún sin tamaño (pestaña oculta): nada que dibujar
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
   ctx.strokeStyle = getCssVar("--grid-line"); ctx.lineWidth = 3; ctx.stroke();
   const col = countdown != null ? getCssVar("--accent4") : getCssVar("--accent3");

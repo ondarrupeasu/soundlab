@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#1c1c1e">
+<meta name="theme-color" content="#0e0f12">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <title>SoundLab</title>
@@ -19,45 +19,33 @@
 ::-webkit-scrollbar-thumb{background:rgba(140,140,150,.45);border-radius:4px}
 ::-webkit-scrollbar-thumb:hover{background:rgba(140,140,150,.7)}
 ::-webkit-scrollbar-corner{background:transparent}
+  /* ===== Casa de Estilo (familia Tartanga): coral sobre oscuro frío =====
+     Tokens de ~/Proyectos/missioncontrol/shared/web/casa-estilo.css mapeados a
+     los nombres que ya usa SoundLab, para re-teñir toda la web sin tocar lógica.
+     El coral es ACENTO (acción/foco/LIVE); base oscura. Tema unificado a oscuro. */
   :root {
-    --bg: #f2f2f7;
-    --bg-elev: #ffffff;
-    --bg-elev2: #ffffff;
-    --text: #1c1c1e;
-    --text-secondary: #6e6e73;
-    --border: rgba(60,60,67,0.18);
-    --accent: #007aff;
-    --accent2: #ff9500;
-    --accent3: #34c759;
-    --accent4: #ff3b30;
-    --track-bg: rgba(60,60,67,0.12);
-    --shadow: 0 1px 2px rgba(0,0,0,0.04);
+    --bg: #0e0f12;
+    --bg-elev: #1c1d23;
+    --bg-elev2: #25262e;
+    --text: #f2f2f4;
+    --text-secondary: #8a8a92;
+    --border: #2a2b32;
+    --accent: #ff5a4d;        /* coral familia (acción/foco/activo) */
+    --accent2: #d9a441;       /* ámbar (aviso / niveles medios) */
+    --accent3: #3fb950;       /* verde (ok) */
+    --accent4: #ff5a4d;       /* coral (rec / pico / LIVE) */
+    --track-bg: #212228;
+    --shadow: 0 1px 2px rgba(0,0,0,0.45);
     --radius: 14px;
-    --radius-sm: 10px;
-    --canvas-bg: #ffffff;
-    --grid-line: rgba(60,60,67,0.08);
-    --wave-color: #007aff;
-    --fft-color: #ff9500;
+    --radius-sm: 8px;
+    --canvas-bg: #131419;
+    --grid-line: rgba(255,255,255,0.06);
+    --wave-color: #ff5a4d;    /* la señal, en coral (en vivo) */
+    --fft-color: #4a9eff;     /* espectro en azul info (contrasta con la onda) */
   }
 
-  [data-theme="dark"] {
-    --bg: #000000;
-    --bg-elev: #1c1c1e;
-    --bg-elev2: #2c2c2e;
-    --text: #f2f2f7;
-    --text-secondary: #98989d;
-    --border: rgba(255,255,255,0.12);
-    --accent: #0a84ff;
-    --accent2: #ff9f0a;
-    --accent3: #30d158;
-    --accent4: #ff453a;
-    --track-bg: rgba(255,255,255,0.16);
-    --shadow: 0 1px 2px rgba(0,0,0,0.4);
-    --canvas-bg: #1c1c1e;
-    --grid-line: rgba(255,255,255,0.08);
-    --wave-color: #0a84ff;
-    --fft-color: #ff9f0a;
-  }
+  /* Tema unificado a oscuro-familia: el estado "dark" del toggle usa lo mismo. */
+  [data-theme="dark"] { }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
