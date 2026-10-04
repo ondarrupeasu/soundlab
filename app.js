@@ -575,6 +575,9 @@ function initControls() {
     if (smpVisualRunning) {
       smpClearCanvases();
     }
+    if (mixIsPlaying) {
+      mixClearMeters();
+    }
   });
 
   // Cambio de módulo (tabs)
@@ -647,6 +650,9 @@ function initControls() {
       if (target !== "sampler") {
         smpOnLeave();
       }
+      if (target !== "mixer" && mixIsPlaying) {
+        mixStop();
+      }
 
       if (target === "dual") {
         setTimeout(() => dualClearCanvases(), 50);
@@ -666,6 +672,8 @@ function initControls() {
         setTimeout(() => rackClearCanvases(), 50);
       } else if (target === "sampler") {
         setTimeout(() => smpClearCanvases(), 50);
+      } else if (target === "mixer") {
+        setTimeout(() => mixClearMeters(), 50);
       } else if (target === "generator" && !isPlaying) {
         setTimeout(() => clearCanvases(), 50);
       }
@@ -4071,3 +4079,221 @@ function samplerInit() {
 }
 
 document.addEventListener("DOMContentLoaded", samplerInit);
+
+
+/* ============================================================
+   ====== MÓDULO: MEZCLADOR (mesa de mezclas didáctica) ======
+   8 canales: GAIN + EQ 3 bandas + PAN + fader + MUTE/SOLO + medidor,
+   sumados en un master con VU estéreo. Fuente de arranque: un tono por
+   canal (acorde) para oír la mezcla. Prefijo mix*.
+   ============================================================ */
+
+let mixAudioCtx = null, mixBus = null, mixMaster = null, mixSplit = null, mixAnL = null, mixAnR = null;
+let mixIsPlaying = false, mixRafId = false, mixBackbone = false;
+const MIX_NCH = 8;
+// notas de un acorde abierto (Cmaj add9) para que la mezcla suene agradable
+const MIX_NOTES = [130.81, 164.81, 196.00, 261.63, 329.63, 392.00, 440.00, 523.25];
+const MIX_WAVES = ["sawtooth", "triangle", "sawtooth", "triangle", "sawtooth", "triangle", "sine", "triangle"];
+const mixCh = [];   // {osc, trim, low, mid, high, pan, fader, meter, gainVal, mute, solo}
+
+function mixEnsureContext() {
+  if (!mixAudioCtx) mixAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (mixAudioCtx.state === "suspended") mixAudioCtx.resume();
+}
+
+function mixBuildBackbone() {
+  if (mixBackbone) return;
+  mixEnsureContext();
+  const ctx = mixAudioCtx;
+  mixBus = ctx.createGain(); mixBus.gain.value = 1;
+  mixMaster = ctx.createGain(); mixMaster.gain.value = 0.7;
+  mixSplit = ctx.createChannelSplitter(2);
+  mixAnL = ctx.createAnalyser(); mixAnL.fftSize = 1024;
+  mixAnR = ctx.createAnalyser(); mixAnR.fftSize = 1024;
+  mixBus.connect(mixMaster);
+  mixMaster.connect(mixSplit);
+  mixSplit.connect(mixAnL, 0); mixSplit.connect(mixAnR, 1);
+  mixMaster.connect(ctx.destination);
+
+  for (let i = 0; i < MIX_NCH; i++) {
+    const trim = ctx.createGain(); trim.gain.value = 1;
+    const low = ctx.createBiquadFilter(); low.type = "lowshelf"; low.frequency.value = 120; low.gain.value = 0;
+    const mid = ctx.createBiquadFilter(); mid.type = "peaking"; mid.frequency.value = 1000; mid.Q.value = 0.9; mid.gain.value = 0;
+    const high = ctx.createBiquadFilter(); high.type = "highshelf"; high.frequency.value = 10000; high.gain.value = 0;
+    const pan = ctx.createStereoPanner(); pan.pan.value = 0;
+    const fader = ctx.createGain(); fader.gain.value = mixFaderGain(70);
+    const meter = ctx.createAnalyser(); meter.fftSize = 512;
+    trim.connect(low); low.connect(mid); mid.connect(high); high.connect(pan);
+    pan.connect(fader); fader.connect(meter); fader.connect(mixBus);
+    mixCh[i] = { osc: null, trim, low, mid, high, pan, fader, meter, faderPos: 70, mute: false, solo: false };
+  }
+  mixBackbone = true;
+}
+
+// fader 0..100 -> ganancia (curva cuadrática, 70≈unidad)
+function mixFaderGain(pos) { const x = pos / 100; return (x * x) * (1 / (0.7 * 0.7)); }
+
+function mixApplyLevels() {
+  const anySolo = mixCh.some(c => c.solo);
+  const now = mixAudioCtx ? mixAudioCtx.currentTime : 0;
+  mixCh.forEach(c => {
+    let g = mixFaderGain(c.faderPos);
+    if (c.mute) g = 0;
+    if (anySolo && !c.solo) g = 0;
+    c.fader.gain.setTargetAtTime(g, now, 0.02);
+  });
+}
+
+function mixStartSources() {
+  const ctx = mixAudioCtx;
+  mixStopSources();
+  for (let i = 0; i < MIX_NCH; i++) {
+    const osc = ctx.createOscillator();
+    osc.type = MIX_WAVES[i]; osc.frequency.value = MIX_NOTES[i];
+    const lvl = ctx.createGain(); lvl.gain.value = 0.10;   // nivel de la fuente (headroom para sumar 8)
+    osc.connect(lvl); lvl.connect(mixCh[i].trim);
+    osc.start();
+    mixCh[i].osc = osc; mixCh[i]._lvl = lvl;
+  }
+}
+function mixStopSources() {
+  mixCh.forEach(c => {
+    if (c.osc) { try { c.osc.stop(); } catch (e) {} try { c.osc.disconnect(); } catch (e) {} c.osc = null; }
+    if (c._lvl) { try { c._lvl.disconnect(); } catch (e) {} c._lvl = null; }
+  });
+}
+
+function mixPlay() {
+  mixEnsureContext(); mixBuildBackbone();
+  mixStartSources();
+  mixApplyLevels();
+  mixIsPlaying = true;
+  mixUpdatePlayBtn();
+  mixStartVisual();
+}
+function mixStop() {
+  mixStopSources();
+  mixIsPlaying = false;
+  mixUpdatePlayBtn();
+  if (mixRafId) cancelAnimationFrame(mixRafId);
+  mixClearMeters();
+}
+function mixUpdatePlayBtn() {
+  const btn = document.getElementById("mix-play-btn"); if (!btn) return;
+  btn.classList.toggle("playing", mixIsPlaying);
+  document.getElementById("mix-play-icon").innerHTML = mixIsPlaying ? "&#9632;" : "&#9658;";
+  document.getElementById("mix-play-label").textContent = mixIsPlaying ? t("rack_stop") : t("mix_play");
+}
+
+/* ----- medidores ----- */
+function mixDrawMeterBar(canvas, level) {   // level 0..1
+  const { ctx, width, height } = setupCanvas(canvas);
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = getCssVar("--track-bg"); ctx.fillRect(0, 0, width, height);
+  const h = level * height;
+  let col = getCssVar("--accent3");
+  if (level > 0.9) col = getCssVar("--accent4");
+  else if (level > 0.75) col = getCssVar("--accent2");
+  ctx.fillStyle = col; ctx.fillRect(0, height - h, width, h);
+}
+function mixRms(analyser, buf) {
+  analyser.getFloatTimeDomainData(buf);
+  let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
+  return Math.sqrt(s / buf.length);
+}
+function mixClearMeters() {
+  mixCh.forEach(c => { if (c.meterCanvas) mixDrawMeterBar(c.meterCanvas, 0); });
+  const ml = document.getElementById("mix-meter-l"), mr = document.getElementById("mix-meter-r");
+  if (ml) mixDrawMeterBar(ml, 0); if (mr) mixDrawMeterBar(mr, 0);
+  const db = document.getElementById("mix-master-db"); if (db) db.textContent = "-∞";
+}
+function mixStartVisual() {
+  const chBufs = mixCh.map(c => new Float32Array(c.meter.fftSize));
+  const lBuf = new Float32Array(mixAnL.fftSize), rBuf = new Float32Array(mixAnR.fftSize);
+  const ml = document.getElementById("mix-meter-l"), mr = document.getElementById("mix-meter-r");
+  const dbEl = document.getElementById("mix-master-db");
+  function draw() {
+    if (!mixIsPlaying) return;
+    mixCh.forEach((c, i) => { if (c.meterCanvas) mixDrawMeterBar(c.meterCanvas, Math.min(1, mixRms(c.meter, chBufs[i]) * 2.2)); });
+    const rmsL = mixRms(mixAnL, lBuf), rmsR = mixRms(mixAnR, rBuf);
+    if (ml) mixDrawMeterBar(ml, Math.min(1, rmsL * 2.2));
+    if (mr) mixDrawMeterBar(mr, Math.min(1, rmsR * 2.2));
+    if (dbEl) { const peak = Math.max(rmsL, rmsR); dbEl.textContent = peak > 0 ? (20 * Math.log10(peak)).toFixed(0) + " dB" : "-∞"; }
+    mixRafId = requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+/* ----- construir la UI de las tiras ----- */
+function mixMakeKnob(parent, name, norm0, onChange) {
+  const wrap = document.createElement("div"); wrap.className = "knob-wrap";
+  const knob = document.createElement("div"); knob.className = "knob small";
+  knob.innerHTML = '<div class="knob-face"><div class="knob-mark"></div></div>';
+  const lbl = document.createElement("div"); lbl.className = "knob-name"; lbl.textContent = name;
+  wrap.appendChild(knob); wrap.appendChild(lbl); parent.appendChild(wrap);
+  makeDubKnob(knob, norm0, onChange);
+}
+
+function initMixerControls() {
+  const strips = document.getElementById("mix-strips");
+  for (let i = 0; i < MIX_NCH; i++) {
+    const strip = document.createElement("div"); strip.className = "mix-strip"; strip.dataset.ch = i;
+    const name = document.createElement("div"); name.className = "mix-name"; name.textContent = "CH" + (i + 1);
+    strip.appendChild(name);
+    mixMakeKnob(strip, "GAIN", 0.5, n => { if (mixBackbone) mixCh[i].trim.gain.setTargetAtTime(n * 2, mixAudioCtx.currentTime, 0.02); });
+    mixMakeKnob(strip, "HIGH", 0.5, n => { if (mixBackbone) mixCh[i].high.gain.setTargetAtTime((n - 0.5) * 30, mixAudioCtx.currentTime, 0.02); });
+    mixMakeKnob(strip, "MID", 0.5, n => { if (mixBackbone) mixCh[i].mid.gain.setTargetAtTime((n - 0.5) * 30, mixAudioCtx.currentTime, 0.02); });
+    mixMakeKnob(strip, "LOW", 0.5, n => { if (mixBackbone) mixCh[i].low.gain.setTargetAtTime((n - 0.5) * 30, mixAudioCtx.currentTime, 0.02); });
+    mixMakeKnob(strip, "PAN", 0.5, n => { if (mixBackbone) mixCh[i].pan.pan.setTargetAtTime(n * 2 - 1, mixAudioCtx.currentTime, 0.02); });
+
+    const row = document.createElement("div"); row.className = "mix-fader-row";
+    const meter = document.createElement("canvas"); meter.className = "mix-meter"; meter.width = 7; meter.height = 150;
+    const fader = document.createElement("input"); fader.type = "range"; fader.min = 0; fader.max = 100; fader.value = 70; fader.className = "mix-fader";
+    fader.addEventListener("input", () => { if (mixBackbone) { mixCh[i].faderPos = parseFloat(fader.value); mixApplyLevels(); } });
+    row.appendChild(meter); row.appendChild(fader); strip.appendChild(row);
+
+    const btns = document.createElement("div"); btns.className = "mix-btns";
+    const mute = document.createElement("button"); mute.className = "mix-btn mute"; mute.textContent = "M";
+    const solo = document.createElement("button"); solo.className = "mix-btn solo"; solo.textContent = "S";
+    mute.addEventListener("click", () => { mixCh[i].mute = !mixCh[i].mute; mute.classList.toggle("on", mixCh[i].mute); mixApplyLevels(); });
+    solo.addEventListener("click", () => { mixCh[i].solo = !mixCh[i].solo; solo.classList.toggle("on", mixCh[i].solo); mixApplyLevels(); });
+    btns.appendChild(mute); btns.appendChild(solo); strip.appendChild(btns);
+
+    strips.appendChild(strip);
+    // guardar refs de UI (los nodos se crean en buildBackbone, que puede ir después)
+    mixChUI(i, meter);
+  }
+
+  // Master
+  const master = document.getElementById("mix-master");
+  master.innerHTML = '<div class="mix-name" data-i18n="mix_master">MASTER</div>';
+  const mrow = document.createElement("div"); mrow.className = "mix-fader-row";
+  const mL = document.createElement("canvas"); mL.className = "mix-meter"; mL.id = "mix-meter-l"; mL.width = 7; mL.height = 150;
+  const mR = document.createElement("canvas"); mR.className = "mix-meter"; mR.id = "mix-meter-r"; mR.width = 7; mR.height = 150;
+  const mf = document.createElement("input"); mf.type = "range"; mf.min = 0; mf.max = 100; mf.value = 70; mf.className = "mix-fader"; mf.id = "mix-master-fader";
+  mf.addEventListener("input", () => { if (mixBackbone) mixMaster.gain.setTargetAtTime(mixFaderGain(parseFloat(mf.value)) * 0.7, mixAudioCtx.currentTime, 0.02); });
+  mrow.appendChild(mL); mrow.appendChild(mf); mrow.appendChild(mR);
+  master.appendChild(mrow);
+  const db = document.createElement("div"); db.className = "mix-db"; db.id = "mix-master-db"; db.textContent = "-∞";
+  master.appendChild(db);
+
+  document.getElementById("mix-play-btn").addEventListener("click", () => { if (mixIsPlaying) mixStop(); else mixPlay(); });
+}
+
+// asociar el canvas-medidor de cada canal cuando exista el nodo (tras buildBackbone)
+function mixChUI(i, meterCanvas) {
+  // se guarda en un array paralelo hasta que exista mixCh[i]
+  mixPendingMeters[i] = meterCanvas;
+}
+const mixPendingMeters = [];
+// tras construir el backbone, enlazar los canvas
+const _mixBuildBackbone = mixBuildBackbone;
+mixBuildBackbone = function () {
+  _mixBuildBackbone();
+  for (let i = 0; i < MIX_NCH; i++) if (mixCh[i] && mixPendingMeters[i]) mixCh[i].meterCanvas = mixPendingMeters[i];
+};
+
+function mixerInit() {
+  initMixerControls();
+}
+document.addEventListener("DOMContentLoaded", mixerInit);

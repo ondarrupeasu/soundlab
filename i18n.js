@@ -156,7 +156,18 @@ const I18N = {
     lp_play: "Transporte",
     lp_bpm: "BPM",
     lp_bars: "Compases",
-    lp_metro: "Metrónomo"
+    lp_metro: "Metrónomo",
+    tab_mixer: "Mezclador",
+    mix_heading: "Mezclador",
+    mix_subtitle: "Mezcla varias fuentes: niveles, EQ, paneo y master",
+    mix_intro: "Una mesa de mezclas: cada canal tiene ganancia, ecualizador, paneo y fader, y todo se suma en el master. Sube faders, ecualiza, panea y usa MUTE/SOLO; vigila los medidores para cuidar el nivel (gain staging).",
+    mix_hint: "Pulsa Reproducir para que suenen los canales. Ajusta GAIN, EQ (LOW/MID/HIGH), PAN y el fader de cada canal; MUTE silencia, SOLO aísla.",
+    mix_play: "Reproducir",
+    mix_guide_title: "Cómo funciona",
+    mix_g_fader: "Fader — el nivel del canal en la mezcla; el medidor avisa si te pasas (gain staging).",
+    mix_g_eq: "EQ (LOW/MID/HIGH) — realza o recorta graves, medios y agudos de cada canal.",
+    mix_g_pan: "PAN — coloca el canal en el panorama estéreo (izquierda ↔ derecha).",
+    mix_g_solo: "MUTE silencia el canal; SOLO deja sonar solo los canales en solo."
   },
   eu: {
     app_title: "SoundLab",
@@ -315,7 +326,18 @@ const I18N = {
     lp_play: "Garraioa",
     lp_bpm: "BPM",
     lp_bars: "Konpasak",
-    lp_metro: "Metronomoa"
+    lp_metro: "Metronomoa",
+    tab_mixer: "Nahasgailua",
+    mix_heading: "Nahasgailua",
+    mix_subtitle: "Nahastu hainbat iturri: mailak, EQ, panoramika eta masterra",
+    mix_intro: "Nahaste-mahai bat: kanal bakoitzak irabazia, ekualizadorea, panoramika eta faderra ditu, eta dena masterrean batzen da. Igo faderrak, ekualizatu, panoramikatu eta erabili MUTE/SOLO; zaindu maila neurgailuekin (gain staging).",
+    mix_hint: "Sakatu Erreproduzitu kanalak entzuteko. Doitu kanal bakoitzaren GAIN, EQ (LOW/MID/HIGH), PAN eta faderra; MUTE isilarazten du, SOLO isolatzen.",
+    mix_play: "Erreproduzitu",
+    mix_guide_title: "Nola dabilen",
+    mix_g_fader: "Faderra — kanalaren maila nahasketan; neurgailuak abisatzen du gehiegi bazoaz (gain staging).",
+    mix_g_eq: "EQ (LOW/MID/HIGH) — kanal bakoitzaren baxuak, ertainak eta altuak igo edo murrizten ditu.",
+    mix_g_pan: "PAN — kanala panorama estereoan kokatzen du (ezkerra ↔ eskuina).",
+    mix_g_solo: "MUTE kanala isilarazten du; SOLO soilik soloan dauden kanalak uzten ditu entzuten."
   },
   en: {
     app_title: "SoundLab",
@@ -474,7 +496,18 @@ const I18N = {
     lp_play: "Transport",
     lp_bpm: "BPM",
     lp_bars: "Bars",
-    lp_metro: "Metronome"
+    lp_metro: "Metronome",
+    tab_mixer: "Mixer",
+    mix_heading: "Mixer",
+    mix_subtitle: "Mix several sources: levels, EQ, panning and master",
+    mix_intro: "A mixing console: each channel has gain, EQ, pan and a fader, and everything sums at the master. Raise faders, EQ, pan and use MUTE/SOLO; watch the meters to keep your levels healthy (gain staging).",
+    mix_hint: "Press Play so the channels sound. Adjust each channel's GAIN, EQ (LOW/MID/HIGH), PAN and fader; MUTE silences, SOLO isolates.",
+    mix_play: "Play",
+    mix_guide_title: "How it works",
+    mix_g_fader: "Fader — the channel's level in the mix; the meter warns if you push too hard (gain staging).",
+    mix_g_eq: "EQ (LOW/MID/HIGH) — boost or cut lows, mids and highs per channel.",
+    mix_g_pan: "PAN — place the channel in the stereo image (left ↔ right).",
+    mix_g_solo: "MUTE silences the channel; SOLO lets only soloed channels through."
   }
 };
 
