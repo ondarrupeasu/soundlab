@@ -4125,7 +4125,7 @@ function mixBuildBackbone() {
     const meter = ctx.createAnalyser(); meter.fftSize = 512;
     trim.connect(low); low.connect(mid); mid.connect(high); high.connect(pan);
     pan.connect(fader); fader.connect(meter); fader.connect(mixBus);
-    mixCh[i] = { osc: null, trim, low, mid, high, pan, fader, meter, faderPos: 70, mute: false, solo: false };
+    mixCh[i] = { osc: null, buffer: null, trim, low, mid, high, pan, fader, meter, faderPos: 70, mute: false, solo: false };
   }
   mixBackbone = true;
 }
@@ -4144,23 +4144,47 @@ function mixApplyLevels() {
   });
 }
 
-function mixStartSources() {
-  const ctx = mixAudioCtx;
-  mixStopSources();
-  for (let i = 0; i < MIX_NCH; i++) {
-    const osc = ctx.createOscillator();
-    osc.type = MIX_WAVES[i]; osc.frequency.value = MIX_NOTES[i];
-    const lvl = ctx.createGain(); lvl.gain.value = 0.10;   // nivel de la fuente (headroom para sumar 8)
-    osc.connect(lvl); lvl.connect(mixCh[i].trim);
-    osc.start();
-    mixCh[i].osc = osc; mixCh[i]._lvl = lvl;
-  }
+function mixStopChannelSource(i) {
+  const c = mixCh[i];
+  if (c.osc) { try { c.osc.stop(); } catch (e) {} try { c.osc.disconnect(); } catch (e) {} c.osc = null; }
+  if (c._lvl) { try { c._lvl.disconnect(); } catch (e) {} c._lvl = null; }
 }
-function mixStopSources() {
-  mixCh.forEach(c => {
-    if (c.osc) { try { c.osc.stop(); } catch (e) {} try { c.osc.disconnect(); } catch (e) {} c.osc = null; }
-    if (c._lvl) { try { c._lvl.disconnect(); } catch (e) {} c._lvl = null; }
-  });
+function mixStartChannelSource(i) {
+  const ctx = mixAudioCtx;
+  mixStopChannelSource(i);
+  const c = mixCh[i];
+  const lvl = ctx.createGain();
+  let node;
+  if (c.buffer) {                                   // audio cargado -> loop a nivel casi pleno
+    node = ctx.createBufferSource(); node.buffer = c.buffer; node.loop = true;
+    lvl.gain.value = 0.9;
+  } else {                                          // tono de prueba con headroom para sumar 8
+    node = ctx.createOscillator(); node.type = MIX_WAVES[i]; node.frequency.value = MIX_NOTES[i];
+    lvl.gain.value = 0.10;
+  }
+  node.connect(lvl); lvl.connect(c.trim);
+  node.start();
+  c.osc = node; c._lvl = lvl;
+}
+function mixStartSources() { for (let i = 0; i < MIX_NCH; i++) mixStartChannelSource(i); }
+function mixStopSources() { for (let i = 0; i < MIX_NCH; i++) mixStopChannelSource(i); }
+
+// Cargar un audio en un canal (se reproduce en bucle en lugar del tono)
+let mixLoadTarget = -1;
+function mixLoadFile(i, file) {
+  mixEnsureContext(); mixBuildBackbone();
+  file.arrayBuffer()
+    .then(ab => mixAudioCtx.decodeAudioData(ab))
+    .then(buf => {
+      mixCh[i].buffer = buf;
+      const strip = document.querySelector(`#mix-strips .mix-strip[data-ch="${i}"]`);
+      if (strip) {
+        strip.querySelector(".mix-name").textContent = file.name.replace(/\.[^.]+$/, "").slice(0, 8);
+        const s = strip.querySelector(".mix-src"); if (s) s.classList.add("on");
+      }
+      if (mixIsPlaying) mixStartChannelSource(i);
+    })
+    .catch(() => {});
 }
 
 function mixPlay() {
@@ -4240,6 +4264,9 @@ function initMixerControls() {
     const strip = document.createElement("div"); strip.className = "mix-strip"; strip.dataset.ch = i;
     const name = document.createElement("div"); name.className = "mix-name"; name.textContent = "CH" + (i + 1);
     strip.appendChild(name);
+    const src = document.createElement("button"); src.className = "mix-src"; src.title = "Cargar audio"; src.innerHTML = "&#9650;";
+    src.addEventListener("click", () => { mixLoadTarget = i; document.getElementById("mix-file-input").click(); });
+    strip.appendChild(src);
     mixMakeKnob(strip, "GAIN", 0.5, n => { if (mixBackbone) mixCh[i].trim.gain.setTargetAtTime(n * 2, mixAudioCtx.currentTime, 0.02); });
     mixMakeKnob(strip, "HIGH", 0.5, n => { if (mixBackbone) mixCh[i].high.gain.setTargetAtTime((n - 0.5) * 30, mixAudioCtx.currentTime, 0.02); });
     mixMakeKnob(strip, "MID", 0.5, n => { if (mixBackbone) mixCh[i].mid.gain.setTargetAtTime((n - 0.5) * 30, mixAudioCtx.currentTime, 0.02); });
@@ -4278,6 +4305,10 @@ function initMixerControls() {
   master.appendChild(db);
 
   document.getElementById("mix-play-btn").addEventListener("click", () => { if (mixIsPlaying) mixStop(); else mixPlay(); });
+  document.getElementById("mix-file-input").addEventListener("change", e => {
+    if (e.target.files && e.target.files[0] && mixLoadTarget >= 0) mixLoadFile(mixLoadTarget, e.target.files[0]);
+    e.target.value = "";
+  });
 }
 
 // asociar el canvas-medidor de cada canal cuando exista el nodo (tras buildBackbone)
